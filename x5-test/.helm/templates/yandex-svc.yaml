@@ -1,0 +1,29 @@
+{{- if .Values.yandexLoadBalancer.enabled }}
+{{- $fullName := include "x5-test.fullname" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "x5-test.fullname" . }}-yandex-svc
+  labels:
+    {{- include "x5-test.labels" . | nindent 4 }}
+spec:
+  type: LoadBalancer
+  {{- if .Values.yandexLoadBalancer.enabled }}
+  loadBalancerIP: {{ .Values.yandexLoadBalancer.loadBalancerIP }}
+  {{- end }}
+  {{- if .Values.yandexLoadBalancer.enabled }}
+  externalTrafficPolicy: {{ .Values.yandexLoadBalancer.externalTrafficPolicy }}
+  {{- end }}
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+    - port: 443
+      targetPort: 443
+      protocol: TCP
+      name: https
+  selector:
+    {{- include "x5-test.nginx-cert.selectorLabels" . | nindent 4 }}
+{{- end }}
+

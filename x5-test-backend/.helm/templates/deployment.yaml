@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "x5-test-backend.fullname" . }}
+  labels:
+    {{- include "x5-test-backend.labels" . | nindent 4 }}
+spec:
+{{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- include "x5-test-backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        {{- include "x5-test-backend.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+#      serviceAccountName: {{ include "x5-test-backend.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          {{- range $key, $val := .Values.env }}
+          - name: {{$key}}
+            value: {{ $val | quote }}
+          {{- end }}
+          - name: DB_CONNECTION
+            value: {{ include "x5-test-backend.databaseConnection" . | quote }}
+          - name: DB_HOST
+            value: {{ include "x5-test-backend.databaseHost" . | quote }}
+          - name: DB_PORT
+            value: {{ include "x5-test-backend.databasePort" . | quote }}
+          - name: DB_DATABASE
+            value: {{ include "x5-test-backend.databaseName" . | quote }}
+          - name: DB_USERNAME
+            value: {{ include "x5-test-backend.databaseUser" . | quote }}
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "x5-test-backend.databaseSecretName" . }}
+                key: postgresql-password
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      initContainers:
+        - name: init-postresql-{{ .Chart.Name }}
+          image: busybox:1.32
+          command: [ 'sh', '-c', 'until nslookup {{ include "x5-test-backend.databaseHost" . }}.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for mydb; sleep 2; done' ]
+        - name: init-migrations-{{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          env:
+          {{- range $key, $val := .Values.env }}
+          - name: {{$key}}
+            value: {{ $val | quote }}
+          {{- end }}
+          - name: DB_CONNECTION
+            value: {{ include "x5-test-backend.databaseConnection" . | quote }}
+          - name: DB_HOST
+            value: {{ include "x5-test-backend.databaseHost" . | quote }}
+          - name: DB_PORT
+            value: {{ include "x5-test-backend.databasePort" . | quote }}
+          - name: DB_DATABASE
+            value: {{ include "x5-test-backend.databaseName" . | quote }}
+          - name: DB_USERNAME
+            value: {{ include "x5-test-backend.databaseUser" . | quote }}
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "x5-test-backend.databaseSecretName" . }}
+                key: postgresql-password
+          command: ['sh', '-c', "php artisan migrate --force"]
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

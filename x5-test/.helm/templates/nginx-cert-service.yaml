@@ -1,0 +1,21 @@
+{{- if .Values.yandexLoadBalancer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "x5-test.fullname" . }}-nginx-cert-svc
+  labels:
+    {{- include "x5-test.nginx-cert.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 443
+      targetPort: https
+      protocol: TCP
+      name: https
+  selector:
+    {{- include "x5-test.nginx-cert.selectorLabels" . | nindent 4 }}
+{{- end }}

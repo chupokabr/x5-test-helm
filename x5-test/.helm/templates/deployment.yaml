@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "x5-test.fullname" . }}
+  labels:
+    {{- include "x5-test.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "x5-test.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        {{- include "x5-test.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+#      serviceAccountName: {{ include "x5-test.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          #use command if you build image without prod env
+          #command: ['sh', '-c', "npm run build && npm run start"]
+          env:
+          {{- range $key, $val := .Values.env }}
+          - name: {{$key}}
+            value: {{ $val | quote }}
+          {{- end }}
+          - name: MONGODB_HOST
+            value: {{ include "x5-test.mongoHost" . | quote }}
+          - name: REDIS_HOST
+            value: {{ include "x5-test.redisHost" . | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.applicationPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      initContainers:
+        - name: init-mongo-{{ .Chart.Name }}
+          image: busybox:1.32
+          command: [ 'sh', '-c', 'until nslookup {{ include "x5-test.mongoHost" . }}.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for mydb; sleep 2; done' ]
+        - name: init-redis-{{ .Chart.Name }}
+          image: busybox:1.32
+          command: [ 'sh', '-c', 'until nslookup {{ include "x5-test.redisHost" . }}.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for mydb; sleep 2; done' ]
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,139 @@
+# Default values for x5-test-backend.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 2
+
+image:
+  repository: artwdev/x5-test-backend
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "1.0"
+
+env:
+  APP_KEY: "base64:l7J0+k1XXfSyAIBrQQGki4r/jLx3Io1XKgTkIrsXgqU="
+  APP_ENV: production
+  APP_DEBUG: false
+  LOG_CHANNEL: stderr
+
+imagePullSecrets: []
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+
+
+#Если в кластере работает Ingress, то включаем его
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    #kubernetes.io/tls-acme: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: x5-backend.artw.dev
+      paths:
+        - "/"
+  tls:
+    - secretName: x5-backend-secret-tls
+      hosts:
+        - x5-backend.artw.dev
+
+#В облаке яндекса доступ из вне доступен только через сервис LoadBalancer
+#К сожалению, он не дружит с Ingress. Поэтому при включении данной настройки мы поднимаем дополнительный сервис
+#c nginx + certbot для получения SSL сертификата Let`s encrypt и терминации HTTPS трафика
+yandexLoadBalancer:
+  enabled: true
+  #set this option if you use static ip for YandexBalancer
+#  loadBalancerIP: 84.201.138.31
+  port: 80
+
+  #Local или Cluster
+  #Local - трафик напрямую попадает на узлы, где запущены контейнеры приложений.
+  #При этом:
+  # - Сохраняется IP-адрес запроса пользователя.
+  # - Используется меньше горизонтального трафика между виртуальными машинами.
+  #Cluster - трафик попадает на любой из узлов кластера Kubernetes.
+  #При этом:
+  # - В случае отсутствия нужных подов на узле, трафик перенаправляется с помощью kube-proxy на другой узел.
+  externalTrafficPolicy: Cluster
+
+  nginxCert:
+    image:
+      repository: artwdev/nginx-cert
+      tag: "1.0"
+    env:
+      TZ: Europe/Moscow
+      LETSENCRYPT: true
+      LE_EMAIL: info@site.ru
+      LE_FQDN: x5-backend.artw.dev
+    resources: {}
+
+
+
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+
+#postgresql for backend
+postgresql:
+  enabled: true
+
+  image:
+    repository: bitnami/postgresql
+    tag: "13"
+
+  fullnameOverride: "x5-backend-postgresql"
+
+  postgresqlUsername: "x5_user"
+  postgresqlPassword: "x5_user_password"
+  postgresqlDatabase: "x5_test_db"
+#  postgresqlDataDir: "/bitnami/postgresql/data"
+
+  postgresqlMaxConnections: 210
+#  postgresqlPostgresConnectionLimit: 200
